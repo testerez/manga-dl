@@ -22,28 +22,27 @@ output.on('close', function() {
 archive.on('error', function(err: any) {
   console.error(err);
 });
-// pipe archive data to the file
 archive.pipe(output);
 
 let total = 0;
-let pendingCount = 0;
-let done = false;
-function dlImage(url: string, name: string) {
+let pending = [] as Promise<any>[];
+async function dlImage(url: string, name: string, isLast: boolean) {
   total++;
-  pendingCount++;
-  http.get(url, response => {
-    pendingCount--;
-    archive.append(response as any, { name });
-    if (!pendingCount && done) {
-      archive.finalize();
-    }
-  });
+  pending.push(new Promise(resolve => {
+    http.get(url, response => {
+      archive.append(response as any, { name });
+      resolve();
+    });
+  }))
+  if (isLast) {
+    await Promise.all(pending);
+    archive.finalize();
+  }
 }
 
 const c = new Crawler({
   maxConnections: 5,
   onDrain: function (pool: any) {
-    done = true;
     c.pool.destroyAllNow();
   },
     callback : function (error: any, result: any, $: CheerioAPI) {
@@ -51,14 +50,19 @@ const c = new Crawler({
           console.error(error);
           return;
         }
-
-        const imgUrl = $('img#image').attr('src');
-        dlImage(url.resolve(result.uri, imgUrl), last(imgUrl.split('/')));
-
+      
         const nextUrl = $('a.next_page').attr('href');
-        if (nextUrl && /\d+\.html/.test(nextUrl)) {
+        const hasNext = nextUrl && /\d+\.html/.test(nextUrl);
+        if (hasNext) {
           c.queue(url.resolve(result.uri, nextUrl));
         }
+
+        const imgUrl = $('img#image').attr('src');
+        dlImage(
+          url.resolve(result.uri, imgUrl),
+          last(imgUrl.split('/')),
+          !hasNext
+        );
     }
 });
 
