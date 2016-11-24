@@ -1,5 +1,4 @@
-import * as Crawler from 'crawler';
-import 'cheerio';
+import * as cheerio from 'cheerio';
 import * as url from 'url';
 import * as minimist from 'minimist';
 import * as process from 'process';
@@ -7,9 +6,13 @@ import * as fs from 'fs';
 import * as archiver from 'archiver';
 import * as http from 'http';
 import { last } from 'lodash';
+import fetch from 'node-fetch';
 const argv = minimist(process.argv.slice(2));
 
 const rootUrl = argv._[0];
+if (!rootUrl) {
+  throw new Error('You must provide an url');
+}
 
 // create a file to stream archive data to.
 const output = fs.createWriteStream(__dirname + '/manga.cbz');
@@ -17,53 +20,65 @@ const archive = archiver('zip', {
     store: true // Sets the compression method to STORE.
 });
 output.on('close', function() {
-  console.log(`Done! - ${total} images downloaded`);
+  console.log(`Done!`);
 });
 archive.on('error', function(err: any) {
   console.error(err);
 });
 archive.pipe(output);
 
-let total = 0;
-let pending = [] as Promise<any>[];
-async function dlImage(url: string, name: string, isLast: boolean) {
-  total++;
-  pending.push(new Promise(resolve => {
+async function dlImage(url: string) {
+  console.log(`downloading ${url}`);
+  const name = last(url.split('/'));
+  return new Promise(resolve => {
     http.get(url, response => {
       archive.append(response as any, { name });
       resolve();
     });
-  }))
-  if (isLast) {
-    await Promise.all(pending);
-    archive.finalize();
-  }
+  })
 }
 
-const c = new Crawler({
-  maxConnections: 5,
-  onDrain: function (pool: any) {
-    c.pool.destroyAllNow();
-  },
-    callback : function (error: any, result: any, $: CheerioAPI) {
-        if(error){
-          console.error(error);
-          return;
-        }
-      
-        const nextUrl = $('a.next_page').attr('href');
-        const hasNext = nextUrl && /\d+\.html/.test(nextUrl);
-        if (hasNext) {
-          c.queue(url.resolve(result.uri, nextUrl));
-        }
+async function getPage(url: string) {
+  const resp = await fetch(url);
+  const html = await resp.text();
+  return cheerio.load(html);
+}
 
-        const imgUrl = $('img#image').attr('src');
-        dlImage(
-          url.resolve(result.uri, imgUrl),
-          last(imgUrl.split('/')),
-          !hasNext
-        );
-    }
-});
+async function extractImageUrl(pageUrl: string) {
+  const $ = await getPage(pageUrl);
+  const relativeUrl = $('img#image').attr('src');
+  return relativeUrl
+    ? url.resolve(pageUrl, relativeUrl)
+    : null;
+}
 
-c.queue(rootUrl);
+/**
+ * Useful to log intermediatate result with `map` in a functional chain
+ * Example: `.map(logReturn('intermediate:'))`
+ */
+const logReturn = (prefix: string) => (value: any) => {
+  console.log(value);
+  return value;
+}
+
+(async () => {
+  try {
+    const $ = await getPage(rootUrl);
+    const imageUrls = await Promise.all($('select.m')
+      .eq(0)
+      .find('option')
+      .get()
+      .map(o => $(o).attr('value'))
+      .filter(s => s != '0')
+      .map(s => url.resolve(rootUrl, `${s}.html`))
+      .map(extractImageUrl)
+    );
+    await Promise.all(imageUrls
+      .filter(url => url)
+      .map(dlImage)
+    );
+    archive.finalize();
+  } catch (e) {
+    console.error(e);
+  }
+})();
