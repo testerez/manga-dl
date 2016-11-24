@@ -1,0 +1,28 @@
+{
+  "name": "manga-dl",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node ."
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/archiver": "^0.15.35",
+    "@types/lodash": "^4.14.40",
+    "@types/minimist": "^1.1.29",
+    "archiver": "^1.2.0",
+    "crawler": "^0.4.3",
+    "lodash": "^4.17.2",
+    "minimist": "^1.2.0",
+    "ts-node": "^1.7.0",
+    "typescript": "^2.0.10"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^0.17.31",
+    "@types/node": "^6.0.51",
+    "cheerio": "^0.22.0"
+  }
+}
