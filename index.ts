@@ -71,10 +71,10 @@ async function dlChapter(pageUrl: string) {
   const archive = archiver('zip', {
       store: true // Sets the compression method to STORE.
   });
-  output.on('close', function() {
+  output.on('close', () => {
     console.log(`Created ${fileName}`);
   });
-  archive.on('error', function(err: any) {
+  archive.on('error', (err: any) => {
     console.error(err);
   });
   archive.pipe(output);
@@ -128,15 +128,16 @@ async function dlAllChapters(pageUrl: string) {
 // Execute command
 // ===============================
 
-const rootUrl = argv._[0];
-if (!rootUrl) {
-  throw new Error('You must provide an url');
-}
 (async function () {
   try {
+    const rootUrl = argv._[0];
+    if (!rootUrl) {
+      throw new Error('You must provide an url');
+    }
     await dlAllChapters(rootUrl);
   } catch (e) {
     console.error(e);
+    process.exit(1);
   }
 })();
 
